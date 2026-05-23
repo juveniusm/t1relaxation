@@ -1,34 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<OfficeApp
-    xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:type="ContentApp">
-
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xsi:type="ContentApp">
   <Id>0c52dd6a-1251-4878-b0ed-776430672d02</Id>
   <Version>1.0.0.0</Version>
   <ProviderName>Juvenius Martin</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-
-  <DisplayName DefaultValue="T1 Relaxation"/>
-  <Description DefaultValue="Interactive T1 longitudinal relaxation visualization. Fire a 90 degree RF pulse and watch Mz recover for fat, muscle, and water."/>
-
-  <IconUrl DefaultValue="https://juveniusm.github.io/t1relaxation/addin/icon.svg"/>
-  <HighResolutionIconUrl DefaultValue="https://juveniusm.github.io/t1relaxation/addin/icon.svg"/>
-  <SupportUrl DefaultValue="https://github.com/juveniusm/t1relaxation"/>
-
+  <DisplayName DefaultValue="T1 Relaxation" />
+  <Description DefaultValue="Interactive T1 longitudinal relaxation visualization. Fire a 90 degree RF pulse and watch Mz recover for fat, muscle, and water." />
+  <IconUrl DefaultValue="https://juveniusm.github.io/t1relaxation/addin/icon-64.png" />
+  <HighResolutionIconUrl DefaultValue="https://juveniusm.github.io/t1relaxation/addin/icon-128.png" />
+  <SupportUrl DefaultValue="https://github.com/juveniusm/t1relaxation" />
   <AppDomains>
     <AppDomain>https://juveniusm.github.io</AppDomain>
   </AppDomains>
-
   <Hosts>
-    <Host Name="Presentation"/>
+    <Host Name="Presentation" />
   </Hosts>
-
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://juveniusm.github.io/t1relaxation/"/>
+    <SourceLocation DefaultValue="https://juveniusm.github.io/t1relaxation/index.html" />
+    <RequestedHeight>600</RequestedHeight>
     <RequestedWidth>800</RequestedWidth>
-    <RequestedHeight>500</RequestedHeight>
   </DefaultSettings>
-
-  <Permissions>ReadWriteDocument</Permissions>
+  <Permissions>Restricted</Permissions>
 </OfficeApp>

@@ -26,4 +26,4 @@ Drop `manifest.xml` into:
 
 - The manifest GUID is `0c52dd6a-1251-4878-b0ed-776430672d02`. Change it if you fork.
 - `SourceLocation` and `IconUrl` must be HTTPS. GitHub Pages serves both.
-- If the icon doesn't render, replace `icon.svg` with a 64x64 PNG and update the manifest's `IconUrl`.
+- Icons live at `icon-64.png` and `icon-128.png`. Replace them and re-push if you want a custom look (keep the filenames or update the manifest's `IconUrl` / `HighResolutionIconUrl`).
