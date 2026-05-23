@@ -122,8 +122,58 @@
   .panel-title { fill: var(--text); font-size: 14px; font-weight: 600; }
   .proton-label { font-size: 13px; font-weight: 700; }
   .proton-sub { font-size: 12px; fill: var(--muted); }
-  .square-label { font-size: 13px; font-weight: 700; }
+  .square-label { font-size: 19px; font-weight: 700; }
   .square-sub { font-size: 11px; fill: var(--muted); }
+
+  /* HTML squares panel (shown when paused) */
+  .squares-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition:
+      max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+      padding    0.4s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity    0.25s ease 0.1s;
+  }
+  .squares-panel.visible {
+    max-height: 360px;
+    opacity: 1;
+    padding: 14px 0 4px;
+    pointer-events: auto;
+  }
+  .squares-panel .title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+  }
+  .squares-row {
+    display: flex;
+    gap: 36px;
+    align-items: flex-start;
+  }
+  .square-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .square-box {
+    width: 78px;
+    height: 78px;
+    border-width: 4px;
+    border-style: solid;
+    border-radius: 4px;
+    background: #000;
+  }
+  .square-item .name { font-size: 16px; font-weight: 700; }
+  .squares-panel .time-label {
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
+    margin-top: 2px;
+  }
 </style>
 </head>
 <body>
@@ -134,7 +184,26 @@
   </header>
 
   <div class="chart-wrap">
-    <svg id="chart" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet"></svg>
+    <svg id="chart" viewBox="0 0 1000 540" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="squares-panel" id="squaresPanel">
+    <div class="title">T1-weighted MRI signal at this moment</div>
+    <div class="squares-row">
+      <div class="square-item">
+        <div class="square-box" id="sq-fat" style="border-color: var(--fat);"></div>
+        <div class="name" style="color: var(--fat);">Fat</div>
+      </div>
+      <div class="square-item">
+        <div class="square-box" id="sq-muscle" style="border-color: var(--muscle);"></div>
+        <div class="name" style="color: var(--muscle);">Muscle</div>
+      </div>
+      <div class="square-item">
+        <div class="square-box" id="sq-water" style="border-color: var(--water);"></div>
+        <div class="name" style="color: var(--water);">Water / CSF</div>
+      </div>
+    </div>
+    <div class="time-label" id="squaresTime"></div>
   </div>
 
   <div class="controls">
@@ -170,8 +239,8 @@
   };
 
   // ---- Layout ----
-  const W = 1000, H = 620;
-  const margin = { top: 30, right: 260, bottom: 150, left: 60 };
+  const W = 1000, H = 540;
+  const margin = { top: 30, right: 260, bottom: 70, left: 60 };
   const plotW = W - margin.left - margin.right;
   const plotH = H - margin.top - margin.bottom;
 
@@ -223,10 +292,6 @@
     x1: margin.left, y1: yScale(1), x2: margin.left + plotW, y2: yScale(1),
     stroke: C.axis, 'stroke-dasharray': '4 4', 'stroke-opacity': 0.5
   });
-  el('text', {
-    x: margin.left + plotW - 6, y: yScale(1) - 6, 'text-anchor': 'end',
-    fill: C.muted, 'font-size': 13
-  }).textContent = 'M0 (equilibrium)';
 
   // ---- Curves ----
   function curvePath(T1) {
@@ -267,7 +332,7 @@
   const PROTON_R = 11;
   const protons = tissues.map((tis, i) => {
     const cy = margin.top + slotH * (i + 0.5);
-    const cx = panelX + panelW * 0.38;
+    const cx = panelX + panelW * 0.25;
 
     // axis guides (z vertical, xy horizontal)
     el('line', {
@@ -300,47 +365,20 @@
 
     // tissue label
     el('text', {
-      x: cx + ARROW_LEN + 26, y: cy - 4, 'text-anchor': 'start',
+      x: cx + ARROW_LEN + 50, y: cy - 4, 'text-anchor': 'start',
       class: 'proton-label', fill: tis.color
     }).textContent = tis.name;
     el('text', {
-      x: cx + ARROW_LEN + 26, y: cy + 10, 'text-anchor': 'start', class: 'proton-sub'
+      x: cx + ARROW_LEN + 50, y: cy + 10, 'text-anchor': 'start', class: 'proton-sub'
     }).textContent = `T1 = ${tis.T1} ms`;
 
     return { tis, cx, cy, arrow };
   });
 
-  // ---- Brightness squares (visible only when paused) ----
-  const squaresGroup = el('g', { id: 'squares', opacity: 0 });
-  const SQUARE_SIZE = 56;
-  const SQUARE_GAP = 24;
-  const squaresTotalW = 3 * SQUARE_SIZE + 2 * SQUARE_GAP;
-  const squaresStartX = margin.left + (plotW - squaresTotalW) / 2;
-  const squaresY = margin.top + plotH + 58;
-
-  el('text', {
-    x: margin.left + plotW / 2, y: squaresY - 12, 'text-anchor': 'middle',
-    fill: C.text, 'font-size': 14, 'font-weight': 600
-  }, squaresGroup).textContent = 'T1-weighted MRI signal at this moment';
-
-  const squareTimeLabel = el('text', {
-    x: margin.left + plotW / 2, y: squaresY + SQUARE_SIZE + 32, 'text-anchor': 'middle',
-    fill: C.muted, 'font-size': 13, 'font-style': 'italic'
-  }, squaresGroup);
-
-  const brightnessSquares = tissues.map((tis, i) => {
-    const sx = squaresStartX + i * (SQUARE_SIZE + SQUARE_GAP);
-    const rect = el('rect', {
-      x: sx, y: squaresY,
-      width: SQUARE_SIZE, height: SQUARE_SIZE,
-      fill: '#000000', stroke: tis.color, 'stroke-width': 3.5, rx: 3
-    }, squaresGroup);
-    el('text', {
-      x: sx + SQUARE_SIZE / 2, y: squaresY + SQUARE_SIZE + 16, 'text-anchor': 'middle',
-      class: 'square-label', fill: tis.color
-    }, squaresGroup).textContent = tis.name;
-    return rect;
-  });
+  // ---- Brightness squares (HTML, shown only when paused) ----
+  const squaresPanel = document.getElementById('squaresPanel');
+  const squaresTimeEl = document.getElementById('squaresTime');
+  const brightnessSquares = tissues.map(tis => document.getElementById(`sq-${tis.key}`));
 
   // ---- Curve cursor + tissue markers (hidden until pulse fires) ----
   const cursor = el('line', {
@@ -362,11 +400,6 @@
   const dragOverlay = el('rect', {
     x: margin.left, y: margin.top, width: plotW, height: plotH,
     fill: 'transparent', style: 'cursor: ew-resize; display: none;'
-  });
-  const cursorHandle = el('circle', {
-    cx: xScale(0), cy: margin.top - 6, r: 7,
-    fill: C.cursor, stroke: '#FFFFFF', 'stroke-width': 1.8,
-    style: 'cursor: ew-resize; display: none;'
   });
 
   // ---- State machine + animation ----
@@ -402,7 +435,6 @@
     cursor.setAttribute('stroke-opacity', visible ? 0.55 : 0);
     cursorLabel.setAttribute('x', x);
     cursorLabel.textContent = visible ? `t = ${Math.round(t)} ms` : '';
-    cursorHandle.setAttribute('cx', x);
     tissues.forEach(tis => {
       const cy = visible ? yScale(mz(t, tis.T1)) : yScale(1);
       markerEls[tis.key].setAttribute('cx', x);
@@ -413,23 +445,22 @@
 
   function setSliderMode(on) {
     dragOverlay.style.display = on ? 'block' : 'none';
-    cursorHandle.style.display = on ? 'block' : 'none';
     cursor.setAttribute('stroke-width', on ? 2.5 : 1);
     cursor.setAttribute('stroke-dasharray', on ? '' : '3 4');
   }
 
   function showSquares(t) {
-    squaresGroup.setAttribute('opacity', 1);
-    squareTimeLabel.textContent = `at t = ${Math.round(t)} ms after RF pulse — drag the line to scrub`;
-    brightnessSquares.forEach((rect, i) => {
+    squaresPanel.classList.add('visible');
+    squaresTimeEl.textContent = `at t = ${Math.round(t)} ms after RF pulse — drag the line to scrub`;
+    brightnessSquares.forEach((box, i) => {
       const intensity = mz(t, tissues[i].T1);              // 0 → 1
       const g = Math.round(Math.max(0, Math.min(1, intensity)) * 255);
-      rect.setAttribute('fill', `rgb(${g},${g},${g})`);
+      box.style.background = `rgb(${g},${g},${g})`;
     });
     setSliderMode(true);
   }
   function hideSquares() {
-    squaresGroup.setAttribute('opacity', 0);
+    squaresPanel.classList.remove('visible');
     setSliderMode(false);
   }
 
@@ -506,12 +537,10 @@
     dragging = false;
     try { e.target.releasePointerCapture(e.pointerId); } catch (_) {}
   }
-  [dragOverlay, cursorHandle].forEach(elm => {
-    elm.addEventListener('pointerdown', startDrag);
-    elm.addEventListener('pointermove', doDrag);
-    elm.addEventListener('pointerup', endDrag);
-    elm.addEventListener('pointercancel', endDrag);
-  });
+  dragOverlay.addEventListener('pointerdown', startDrag);
+  dragOverlay.addEventListener('pointermove', doDrag);
+  dragOverlay.addEventListener('pointerup', endDrag);
+  dragOverlay.addEventListener('pointercancel', endDrag);
 
   function tick(ts) {
     if (phase === 'tipping') {
