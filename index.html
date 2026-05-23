@@ -49,13 +49,17 @@
     color: var(--muted);
   }
   .chart-wrap {
-    flex: 1 1 0;
+    flex: 0 1 auto;
+    width: 100%;
+    aspect-ratio: 1000 / 540;
+    max-height: calc(100vh - 200px);
     background: var(--panel);
     border-radius: 12px;
     padding: 10px;
     min-height: 80px;
     box-shadow: 0 2px 16px rgba(44, 94, 110, 0.12);
     border: 1px solid #D9EAE0;
+    margin: 0 auto;
   }
   svg { width: 100%; height: 100%; display: block; }
   .controls {
@@ -122,64 +126,9 @@
   .panel-title { fill: var(--text); font-size: 14px; font-weight: 600; }
   .proton-label { font-size: 13px; font-weight: 700; }
   .proton-sub { font-size: 12px; fill: var(--muted); }
-  .square-label { font-size: 19px; font-weight: 700; }
-  .square-sub { font-size: 11px; fill: var(--muted); }
-
-  /* HTML squares panel (shown when paused) — sizes scale with viewport height */
-  .squares-panel {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: clamp(4px, 1.2vh, 12px);
-    padding: 0;
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    pointer-events: none;
-    flex-shrink: 0;
-    transition:
-      max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-      padding    0.4s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity    0.25s ease 0.1s;
-  }
-  .squares-panel.visible {
-    max-height: 50vh;
-    opacity: 1;
-    padding: clamp(4px, 1.2vh, 14px) 0 clamp(2px, 0.5vh, 4px);
-    pointer-events: auto;
-  }
-  .squares-panel .title {
-    font-size: clamp(13px, 2.4vh, 18px);
-    font-weight: 600;
-    color: var(--text);
-    text-align: center;
-  }
-  .squares-row {
-    display: flex;
-    gap: clamp(14px, 4vh, 36px);
-    align-items: flex-start;
-  }
-  .square-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: clamp(4px, 1vh, 8px);
-  }
-  .square-box {
-    width: clamp(36px, 10vh, 78px);
-    height: clamp(36px, 10vh, 78px);
-    border-width: clamp(2px, 0.5vh, 4px);
-    border-style: solid;
-    border-radius: 4px;
-    background: #000;
-  }
-  .square-item .name { font-size: clamp(11px, 2vh, 16px); font-weight: 700; }
-  .squares-panel .time-label {
-    font-size: clamp(10px, 1.7vh, 14px);
-    font-style: italic;
-    color: var(--muted);
-    margin-top: 2px;
-  }
+  .square-svg { transition: opacity 0.2s ease; }
+  .squares-title { fill: var(--text); font-size: 12px; font-weight: 600; }
+  .squares-time { fill: var(--muted); font-size: 11px; font-style: italic; }
 </style>
 </head>
 <body>
@@ -191,25 +140,6 @@
 
   <div class="chart-wrap">
     <svg id="chart" viewBox="0 0 1000 540" preserveAspectRatio="xMidYMid meet"></svg>
-  </div>
-
-  <div class="squares-panel" id="squaresPanel">
-    <div class="title">T1-weighted MRI signal at this moment</div>
-    <div class="squares-row">
-      <div class="square-item">
-        <div class="square-box" id="sq-fat" style="border-color: var(--fat);"></div>
-        <div class="name" style="color: var(--fat);">Fat</div>
-      </div>
-      <div class="square-item">
-        <div class="square-box" id="sq-muscle" style="border-color: var(--muscle);"></div>
-        <div class="name" style="color: var(--muscle);">Muscle</div>
-      </div>
-      <div class="square-item">
-        <div class="square-box" id="sq-water" style="border-color: var(--water);"></div>
-        <div class="name" style="color: var(--water);">Water / CSF</div>
-      </div>
-    </div>
-    <div class="time-label" id="squaresTime"></div>
   </div>
 
   <div class="controls">
@@ -246,7 +176,7 @@
 
   // ---- Layout ----
   const W = 1000, H = 540;
-  const margin = { top: 30, right: 260, bottom: 70, left: 60 };
+  const margin = { top: 30, right: 330, bottom: 70, left: 60 };
   const plotW = W - margin.left - margin.right;
   const plotH = H - margin.top - margin.bottom;
 
@@ -288,7 +218,7 @@
   el('line', { x1: margin.left, y1: margin.top + plotH, x2: margin.left + plotW, y2: margin.top + plotH, stroke: C.axis });
   el('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotH, stroke: C.axis });
   el('text', {
-    x: margin.left + plotW / 2, y: margin.top + plotH + 34, 'text-anchor': 'middle', class: 'axis-title'
+    x: margin.left + plotW / 2, y: margin.top + plotH + 52, 'text-anchor': 'middle', class: 'axis-title'
   }).textContent = 'Time after 90° pulse (ms)';
   el('text', {
     x: 16, y: margin.top + plotH / 2, 'text-anchor': 'middle', class: 'axis-title',
@@ -317,9 +247,14 @@
   // ---- Proton panel (right side) ----
   const panelX = margin.left + plotW + 30;
   const panelW = margin.right - 50;
+  const SQUARE_SIZE = 44;
+  const SQUARE_X = panelX + panelW - SQUARE_SIZE - 6;
   el('text', {
-    x: panelX + panelW / 2, y: margin.top - 6, 'text-anchor': 'middle', class: 'panel-title'
+    x: panelX + (SQUARE_X - panelX) / 2, y: margin.top - 6, 'text-anchor': 'middle', class: 'panel-title'
   }).textContent = 'Proton magnetization vectors';
+  el('text', {
+    x: SQUARE_X + SQUARE_SIZE / 2, y: margin.top - 6, 'text-anchor': 'middle', class: 'squares-title'
+  }).textContent = 'T1-w signal';
 
   // Arrowheads (one per tissue color so the head matches the shaft)
   const defs = el('defs');
@@ -338,7 +273,7 @@
   const PROTON_R = 11;
   const protons = tissues.map((tis, i) => {
     const cy = margin.top + slotH * (i + 0.5);
-    const cx = panelX + panelW * 0.25;
+    const cx = panelX + 50;
 
     // axis guides (z vertical, xy horizontal)
     el('line', {
@@ -349,7 +284,6 @@
       x1: cx - ARROW_LEN - 8, y1: cy, x2: cx + ARROW_LEN + 8, y2: cy,
       stroke: '#BFD8CE', 'stroke-dasharray': '2 3'
     });
-    el('text', { x: cx + ARROW_LEN + 14, y: cy + 3, fill: C.muted, 'font-size': 11 }).textContent = 'xy';
     el('text', { x: cx + 5, y: cy - ARROW_LEN - 10, fill: C.muted, 'font-size': 11 }).textContent = 'z (B0)';
 
     // proton body (circle)
@@ -370,21 +304,33 @@
     });
 
     // tissue label
+    const labelX = cx + ARROW_LEN + 18;
     el('text', {
-      x: cx + ARROW_LEN + 50, y: cy - 4, 'text-anchor': 'start',
+      x: labelX, y: cy - 4, 'text-anchor': 'start',
       class: 'proton-label', fill: tis.color
     }).textContent = tis.name;
     el('text', {
-      x: cx + ARROW_LEN + 50, y: cy + 10, 'text-anchor': 'start', class: 'proton-sub'
+      x: labelX, y: cy + 10, 'text-anchor': 'start', class: 'proton-sub'
     }).textContent = `T1 = ${tis.T1} ms`;
 
-    return { tis, cx, cy, arrow };
+    // brightness square (hidden until paused)
+    const square = el('rect', {
+      x: SQUARE_X, y: cy - SQUARE_SIZE / 2,
+      width: SQUARE_SIZE, height: SQUARE_SIZE,
+      fill: '#000', stroke: tis.color, 'stroke-width': 2.5,
+      rx: 3, class: 'square-svg', opacity: 0
+    });
+
+    return { tis, cx, cy, arrow, square };
   });
 
-  // ---- Brightness squares (HTML, shown only when paused) ----
-  const squaresPanel = document.getElementById('squaresPanel');
-  const squaresTimeEl = document.getElementById('squaresTime');
-  const brightnessSquares = tissues.map(tis => document.getElementById(`sq-${tis.key}`));
+  // ---- Brightness squares (SVG, shown only when paused) ----
+  const brightnessSquares = protons.map(p => p.square);
+  const squaresTimeEl = el('text', {
+    x: SQUARE_X + SQUARE_SIZE,
+    y: margin.top + plotH + 34,
+    'text-anchor': 'end', class: 'squares-time', opacity: 0
+  });
 
   // ---- Curve cursor + tissue markers (hidden until pulse fires) ----
   const cursor = el('line', {
@@ -456,17 +402,19 @@
   }
 
   function showSquares(t) {
-    squaresPanel.classList.add('visible');
-    squaresTimeEl.textContent = `at t = ${Math.round(t)} ms after RF pulse — drag the line to scrub`;
+    squaresTimeEl.textContent = `t = ${Math.round(t)} ms · drag to scrub`;
+    squaresTimeEl.setAttribute('opacity', 1);
     brightnessSquares.forEach((box, i) => {
       const intensity = mz(t, tissues[i].T1);              // 0 → 1
       const g = Math.round(Math.max(0, Math.min(1, intensity)) * 255);
-      box.style.background = `rgb(${g},${g},${g})`;
+      box.setAttribute('fill', `rgb(${g},${g},${g})`);
+      box.setAttribute('opacity', 1);
     });
     setSliderMode(true);
   }
   function hideSquares() {
-    squaresPanel.classList.remove('visible');
+    brightnessSquares.forEach(box => box.setAttribute('opacity', 0));
+    squaresTimeEl.setAttribute('opacity', 0);
     setSliderMode(false);
   }
 
