@@ -49,11 +49,11 @@
     color: var(--muted);
   }
   .chart-wrap {
-    flex: 1;
+    flex: 1 1 0;
     background: var(--panel);
     border-radius: 12px;
     padding: 10px;
-    min-height: 300px;
+    min-height: 80px;
     box-shadow: 0 2px 16px rgba(44, 94, 110, 0.12);
     border: 1px solid #D9EAE0;
   }
@@ -125,51 +125,57 @@
   .square-label { font-size: 19px; font-weight: 700; }
   .square-sub { font-size: 11px; fill: var(--muted); }
 
-  /* HTML squares panel (shown when paused) */
+  /* HTML squares panel (shown when paused) — sizes scale with viewport height */
   .squares-panel {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: clamp(4px, 1.2vh, 12px);
     padding: 0;
     max-height: 0;
     opacity: 0;
     overflow: hidden;
     pointer-events: none;
+    flex-shrink: 0;
     transition:
       max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
       padding    0.4s cubic-bezier(0.4, 0, 0.2, 1),
       opacity    0.25s ease 0.1s;
   }
   .squares-panel.visible {
-    max-height: 360px;
+    max-height: 50vh;
     opacity: 1;
-    padding: 14px 0 4px;
+    padding: clamp(4px, 1.2vh, 14px) 0 clamp(2px, 0.5vh, 4px);
     pointer-events: auto;
   }
   .squares-panel .title {
-    font-size: 18px;
+    font-size: clamp(13px, 2.4vh, 18px);
     font-weight: 600;
     color: var(--text);
     text-align: center;
   }
   .squares-row {
     display: flex;
-    gap: 36px;
+    gap: clamp(14px, 4vh, 36px);
     align-items: flex-start;
   }
-  .square-item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .square-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(4px, 1vh, 8px);
+  }
   .square-box {
-    width: 78px;
-    height: 78px;
-    border-width: 4px;
+    width: clamp(36px, 10vh, 78px);
+    height: clamp(36px, 10vh, 78px);
+    border-width: clamp(2px, 0.5vh, 4px);
     border-style: solid;
     border-radius: 4px;
     background: #000;
   }
-  .square-item .name { font-size: 16px; font-weight: 700; }
+  .square-item .name { font-size: clamp(11px, 2vh, 16px); font-weight: 700; }
   .squares-panel .time-label {
-    font-size: 14px;
+    font-size: clamp(10px, 1.7vh, 14px);
     font-style: italic;
     color: var(--muted);
     margin-top: 2px;
