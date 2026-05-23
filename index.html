@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>T1 Relaxation Curves</title>
+<style>
+  :root {
+    --bg-top:  #DCEEDE;
+    --bg-bot:  #F4FAF5;
+    --panel:   #FFFFFF;
+    --plot-bg: #F7FBF7;
+    --grid:    #C7DDD3;
+    --axis:    #5A7780;
+    --text:    #2C5E6E;
+    --muted:   #6B8590;
+    --fat:     #C68A2A;
+    --muscle:  #C0392B;
+    --water:   #4A92AE;
+    --accent:  #3D7C8B;
+    --accent-hover: #4A8E9D;
+    --navy:    #1E3568;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: linear-gradient(180deg, var(--bg-top), var(--bg-bot));
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 16px 20px;
+    gap: 10px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.2px;
+  }
+  header p {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  .chart-wrap {
+    flex: 1;
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 10px;
+    min-height: 300px;
+    box-shadow: 0 2px 16px rgba(44, 94, 110, 0.12);
+    border: 1px solid #D9EAE0;
+  }
+  svg { width: 100%; height: 100%; display: block; }
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 6px 2px 0;
+  }
+  button {
+    background: #FFFFFF;
+    color: var(--text);
+    border: 1px solid #BFD8CE;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  button:hover {
+    background: #ECF5EF;
+    border-color: var(--accent);
+  }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #FFFFFF;
+    font-weight: 600;
+  }
+  button.primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  input[type=range] {
+    width: 180px;
+    accent-color: var(--accent);
+  }
+  .legend {
+    display: flex;
+    gap: 14px;
+    font-size: 14px;
+    color: var(--text);
+    flex-wrap: wrap;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+  .axis text { fill: var(--axis); font-size: 13px; }
+  .axis line, .axis path { stroke: var(--axis); }
+  .grid line { stroke: var(--grid); stroke-dasharray: 2 4; }
+  .curve { fill: none; stroke-width: 2.5; }
+  .curve.fat { stroke: var(--fat); }
+  .curve.muscle { stroke: var(--muscle); }
+  .curve.water { stroke: var(--water); }
+  .axis-title { fill: var(--text); font-size: 14px; font-weight: 600; }
+  .panel-title { fill: var(--text); font-size: 14px; font-weight: 600; }
+  .proton-label { font-size: 13px; font-weight: 700; }
+  .proton-sub { font-size: 12px; fill: var(--muted); }
+  .square-label { font-size: 13px; font-weight: 700; }
+  .square-sub { font-size: 11px; fill: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>T1 Longitudinal Relaxation — Mz Recovery After a 90° RF Pulse</h1>
+    <p>Click <strong>Fire RF Pulse</strong> to flip each proton's magnetization into the transverse (xy) plane, then watch it return to alignment with B0 at a rate governed by tissue T1. Hit <strong>Pause</strong> to see how bright each tissue would appear on a T1-weighted MRI at that moment.</p>
+  </header>
+
+  <div class="chart-wrap">
+    <svg id="chart" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="controls">
+    <button id="fireBtn" class="primary">Fire RF Pulse</button>
+    <button id="pauseBtn" disabled>Pause</button>
+    <button id="resetBtn">Reset</button>
+    <div class="slider-group">
+      <label for="speed">Speed</label>
+      <input id="speed" type="range" min="0.25" max="3" step="0.05" value="1" />
+    </div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--fat)"></i>Fat (T1 ≈ 250 ms)</span>
+      <span><i class="swatch" style="background:var(--muscle)"></i>Muscle (T1 ≈ 900 ms)</span>
+      <span><i class="swatch" style="background:var(--water)"></i>Water / CSF (T1 ≈ 3000 ms)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const svg = document.getElementById('chart');
+  const NS = 'http://www.w3.org/2000/svg';
+
+  // Theme colors (kept in sync with CSS variables)
+  const C = {
+    plotBg:   '#F7FBF7',
+    grid:     '#C7DDD3',
+    axis:     '#5A7780',
+    text:     '#2C5E6E',
+    muted:    '#6B8590',
+    cursor:   '#2C5E6E',
+    protonStroke: '#234E5C',
+  };
+
+  // ---- Layout ----
+  const W = 1000, H = 620;
+  const margin = { top: 30, right: 260, bottom: 150, left: 60 };
+  const plotW = W - margin.left - margin.right;
+  const plotH = H - margin.top - margin.bottom;
+
+  // ---- Tissue model ----
+  const tissues = [
+    { key: 'fat',    name: 'Fat',         T1: 250,  color: '#C68A2A', cls: 'fat' },
+    { key: 'muscle', name: 'Muscle',      T1: 900,  color: '#C0392B', cls: 'muscle' },
+    { key: 'water',  name: 'Water / CSF', T1: 3000, color: '#4A92AE', cls: 'water' },
+  ];
+
+  const T_MAX = 4000; // ms shown on the curve x-axis
+
+  const xScale = t => margin.left + (t / T_MAX) * plotW;
+  const yScale = m => margin.top + (1 - m) * plotH;
+  const mz = (t, T1) => 1 - Math.exp(-t / T1);
+
+  function el(tag, attrs = {}, parent = svg) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    parent.appendChild(n);
+    return n;
+  }
+
+  // ---- Plot background, grid, axes ----
+  el('rect', { x: margin.left, y: margin.top, width: plotW, height: plotH, fill: C.plotBg, rx: 4, stroke: '#E0EDE4' });
+  const gridG = el('g', { class: 'grid' });
+  const axisG = el('g', { class: 'axis' });
+  for (let i = 0; i <= 4; i++) {
+    const m = i / 4;
+    const y = yScale(m);
+    el('line', { x1: margin.left, y1: y, x2: margin.left + plotW, y2: y }, gridG);
+    el('text', { x: margin.left - 8, y: y + 4, 'text-anchor': 'end' }, axisG).textContent = m.toFixed(2);
+  }
+  for (let t = 0; t <= T_MAX; t += 500) {
+    const x = xScale(t);
+    el('line', { x1: x, y1: margin.top, x2: x, y2: margin.top + plotH }, gridG);
+    el('text', { x: x, y: margin.top + plotH + 16, 'text-anchor': 'middle' }, axisG).textContent = t;
+  }
+  el('line', { x1: margin.left, y1: margin.top + plotH, x2: margin.left + plotW, y2: margin.top + plotH, stroke: C.axis });
+  el('line', { x1: margin.left, y1: margin.top, x2: margin.left, y2: margin.top + plotH, stroke: C.axis });
+  el('text', {
+    x: margin.left + plotW / 2, y: margin.top + plotH + 34, 'text-anchor': 'middle', class: 'axis-title'
+  }).textContent = 'Time after 90° pulse (ms)';
+  el('text', {
+    x: 16, y: margin.top + plotH / 2, 'text-anchor': 'middle', class: 'axis-title',
+    transform: `rotate(-90 16 ${margin.top + plotH / 2})`
+  }).textContent = 'Mz / M0';
+  el('line', {
+    x1: margin.left, y1: yScale(1), x2: margin.left + plotW, y2: yScale(1),
+    stroke: C.axis, 'stroke-dasharray': '4 4', 'stroke-opacity': 0.5
+  });
+  el('text', {
+    x: margin.left + plotW - 6, y: yScale(1) - 6, 'text-anchor': 'end',
+    fill: C.muted, 'font-size': 13
+  }).textContent = 'M0 (equilibrium)';
+
+  // ---- Curves ----
+  function curvePath(T1) {
+    const pts = [];
+    const N = 400;
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * T_MAX;
+      pts.push(`${xScale(t).toFixed(2)},${yScale(mz(t, T1)).toFixed(2)}`);
+    }
+    return 'M' + pts.join(' L');
+  }
+  const markerEls = {};
+  tissues.forEach(tis => {
+    el('path', { class: `curve ${tis.cls}`, d: curvePath(tis.T1) });
+  });
+
+  // ---- Proton panel (right side) ----
+  const panelX = margin.left + plotW + 30;
+  const panelW = margin.right - 50;
+  el('text', {
+    x: panelX + panelW / 2, y: margin.top - 6, 'text-anchor': 'middle', class: 'panel-title'
+  }).textContent = 'Proton magnetization vectors';
+
+  // Arrowheads (one per tissue color so the head matches the shaft)
+  const defs = el('defs');
+  tissues.forEach(tis => {
+    const m = el('marker', {
+      id: `head-${tis.key}`,
+      viewBox: '0 0 10 10', refX: 8, refY: 5,
+      markerWidth: 5, markerHeight: 5, orient: 'auto-start-reverse'
+    }, defs);
+    el('path', { d: 'M0,0 L10,5 L0,10 Z', fill: tis.color }, m);
+  });
+
+  // Three protons stacked vertically — same arrow length for all
+  const slotH = plotH / 3;
+  const ARROW_LEN = Math.min(slotH * 0.34, 60);
+  const PROTON_R = 11;
+  const protons = tissues.map((tis, i) => {
+    const cy = margin.top + slotH * (i + 0.5);
+    const cx = panelX + panelW * 0.38;
+
+    // axis guides (z vertical, xy horizontal)
+    el('line', {
+      x1: cx, y1: cy - ARROW_LEN - 8, x2: cx, y2: cy + ARROW_LEN + 8,
+      stroke: '#BFD8CE', 'stroke-dasharray': '2 3'
+    });
+    el('line', {
+      x1: cx - ARROW_LEN - 8, y1: cy, x2: cx + ARROW_LEN + 8, y2: cy,
+      stroke: '#BFD8CE', 'stroke-dasharray': '2 3'
+    });
+    el('text', { x: cx + ARROW_LEN + 14, y: cy + 3, fill: C.muted, 'font-size': 11 }).textContent = 'xy';
+    el('text', { x: cx + 5, y: cy - ARROW_LEN - 10, fill: C.muted, 'font-size': 11 }).textContent = 'z (B0)';
+
+    // proton body (circle)
+    el('circle', {
+      cx: cx, cy: cy, r: PROTON_R,
+      fill: tis.color, stroke: C.protonStroke, 'stroke-width': 1.2, 'fill-opacity': 0.92
+    });
+    el('text', {
+      x: cx, y: cy + 3.5, 'text-anchor': 'middle',
+      fill: '#FFFFFF', 'font-size': 10, 'font-weight': 700
+    }).textContent = 'H';
+
+    // magnetization arrow (starts vertical, pointing up)
+    const arrow = el('line', {
+      x1: cx, y1: cy, x2: cx, y2: cy - ARROW_LEN,
+      stroke: tis.color, 'stroke-width': 3.5, 'stroke-linecap': 'round',
+      'marker-end': `url(#head-${tis.key})`
+    });
+
+    // tissue label
+    el('text', {
+      x: cx + ARROW_LEN + 26, y: cy - 4, 'text-anchor': 'start',
+      class: 'proton-label', fill: tis.color
+    }).textContent = tis.name;
+    el('text', {
+      x: cx + ARROW_LEN + 26, y: cy + 10, 'text-anchor': 'start', class: 'proton-sub'
+    }).textContent = `T1 = ${tis.T1} ms`;
+
+    return { tis, cx, cy, arrow };
+  });
+
+  // ---- Brightness squares (visible only when paused) ----
+  const squaresGroup = el('g', { id: 'squares', opacity: 0 });
+  const SQUARE_SIZE = 56;
+  const SQUARE_GAP = 24;
+  const squaresTotalW = 3 * SQUARE_SIZE + 2 * SQUARE_GAP;
+  const squaresStartX = margin.left + (plotW - squaresTotalW) / 2;
+  const squaresY = margin.top + plotH + 58;
+
+  el('text', {
+    x: margin.left + plotW / 2, y: squaresY - 12, 'text-anchor': 'middle',
+    fill: C.text, 'font-size': 14, 'font-weight': 600
+  }, squaresGroup).textContent = 'T1-weighted MRI signal at this moment';
+
+  const squareTimeLabel = el('text', {
+    x: margin.left + plotW / 2, y: squaresY + SQUARE_SIZE + 32, 'text-anchor': 'middle',
+    fill: C.muted, 'font-size': 13, 'font-style': 'italic'
+  }, squaresGroup);
+
+  const brightnessSquares = tissues.map((tis, i) => {
+    const sx = squaresStartX + i * (SQUARE_SIZE + SQUARE_GAP);
+    const rect = el('rect', {
+      x: sx, y: squaresY,
+      width: SQUARE_SIZE, height: SQUARE_SIZE,
+      fill: '#000000', stroke: tis.color, 'stroke-width': 3.5, rx: 3
+    }, squaresGroup);
+    el('text', {
+      x: sx + SQUARE_SIZE / 2, y: squaresY + SQUARE_SIZE + 16, 'text-anchor': 'middle',
+      class: 'square-label', fill: tis.color
+    }, squaresGroup).textContent = tis.name;
+    return rect;
+  });
+
+  // ---- Curve cursor + tissue markers (hidden until pulse fires) ----
+  const cursor = el('line', {
+    x1: xScale(0), y1: margin.top, x2: xScale(0), y2: margin.top + plotH,
+    stroke: C.cursor, 'stroke-opacity': 0, 'stroke-dasharray': '3 4'
+  });
+  const cursorLabel = el('text', {
+    x: xScale(0), y: margin.top - 8, 'text-anchor': 'middle',
+    fill: C.cursor, 'font-size': 13, 'font-weight': 600
+  });
+  tissues.forEach(tis => {
+    markerEls[tis.key] = el('circle', {
+      cx: xScale(0), cy: yScale(1), r: 5,
+      fill: tis.color, stroke: '#FFFFFF', 'stroke-width': 1.5, 'fill-opacity': 0
+    });
+  });
+
+  // ---- Slider drag layer (active only while paused) ----
+  const dragOverlay = el('rect', {
+    x: margin.left, y: margin.top, width: plotW, height: plotH,
+    fill: 'transparent', style: 'cursor: ew-resize; display: none;'
+  });
+  const cursorHandle = el('circle', {
+    cx: xScale(0), cy: margin.top - 6, r: 7,
+    fill: C.cursor, stroke: '#FFFFFF', 'stroke-width': 1.8,
+    style: 'cursor: ew-resize; display: none;'
+  });
+
+  // ---- State machine + animation ----
+  // phase ∈ 'pre' (arrows vertical, idle), 'tipping' (90° flip), 'recovering' (T1 return)
+  let phase = 'pre';
+  let phaseStart = 0;
+  let tRecovery = 0;          // virtual ms since pulse end
+  let lastTs = null;
+  let playing = false;
+  let speed = 1;
+  const TIP_DURATION_MS = 450;
+
+  const fireBtn = document.getElementById('fireBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const speedInput = document.getElementById('speed');
+
+  // theta is measured from +z (vertical up): 0 = vertical, π/2 = horizontal (xy plane)
+  function setArrows(thetas) {
+    protons.forEach((p, i) => {
+      const theta = thetas[i];
+      const tipX = p.cx + ARROW_LEN * Math.sin(theta);
+      const tipY = p.cy - ARROW_LEN * Math.cos(theta);
+      p.arrow.setAttribute('x2', tipX);
+      p.arrow.setAttribute('y2', tipY);
+    });
+  }
+
+  function setCursor(t, visible) {
+    const x = xScale(t);
+    cursor.setAttribute('x1', x);
+    cursor.setAttribute('x2', x);
+    cursor.setAttribute('stroke-opacity', visible ? 0.55 : 0);
+    cursorLabel.setAttribute('x', x);
+    cursorLabel.textContent = visible ? `t = ${Math.round(t)} ms` : '';
+    cursorHandle.setAttribute('cx', x);
+    tissues.forEach(tis => {
+      const cy = visible ? yScale(mz(t, tis.T1)) : yScale(1);
+      markerEls[tis.key].setAttribute('cx', x);
+      markerEls[tis.key].setAttribute('cy', cy);
+      markerEls[tis.key].setAttribute('fill-opacity', visible ? 1 : 0);
+    });
+  }
+
+  function setSliderMode(on) {
+    dragOverlay.style.display = on ? 'block' : 'none';
+    cursorHandle.style.display = on ? 'block' : 'none';
+    cursor.setAttribute('stroke-width', on ? 2.5 : 1);
+    cursor.setAttribute('stroke-dasharray', on ? '' : '3 4');
+  }
+
+  function showSquares(t) {
+    squaresGroup.setAttribute('opacity', 1);
+    squareTimeLabel.textContent = `at t = ${Math.round(t)} ms after RF pulse — drag the line to scrub`;
+    brightnessSquares.forEach((rect, i) => {
+      const intensity = mz(t, tissues[i].T1);              // 0 → 1
+      const g = Math.round(Math.max(0, Math.min(1, intensity)) * 255);
+      rect.setAttribute('fill', `rgb(${g},${g},${g})`);
+    });
+    setSliderMode(true);
+  }
+  function hideSquares() {
+    squaresGroup.setAttribute('opacity', 0);
+    setSliderMode(false);
+  }
+
+  function gotoPre() {
+    phase = 'pre';
+    tRecovery = 0;
+    playing = false;
+    setArrows([0, 0, 0]);
+    setCursor(0, false);
+    hideSquares();
+    pauseBtn.textContent = 'Pause';
+    pauseBtn.disabled = true;
+  }
+
+  fireBtn.addEventListener('click', () => {
+    setArrows([0, 0, 0]);
+    setCursor(0, false);
+    hideSquares();
+    tRecovery = 0;
+    phase = 'tipping';
+    phaseStart = performance.now();
+    playing = true;
+    lastTs = null;
+    pauseBtn.disabled = false;
+    pauseBtn.textContent = 'Pause';
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    if (phase !== 'recovering') return;
+    playing = !playing;
+    pauseBtn.textContent = playing ? 'Pause' : 'Resume';
+    lastTs = null;
+    if (!playing) {
+      showSquares(tRecovery);
+    } else {
+      hideSquares();
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    gotoPre();
+    lastTs = null;
+  });
+
+  speedInput.addEventListener('input', e => { speed = parseFloat(e.target.value); });
+
+  // ---- Slider drag (active while paused in recovering phase) ----
+  function clientXToT(clientX) {
+    const rect = svg.getBoundingClientRect();
+    const svgX = (clientX - rect.left) * (W / rect.width);
+    const clamped = Math.max(margin.left, Math.min(margin.left + plotW, svgX));
+    return ((clamped - margin.left) / plotW) * T_MAX;
+  }
+  let dragging = false;
+  function startDrag(e) {
+    if (phase !== 'recovering' || playing) return;
+    dragging = true;
+    e.target.setPointerCapture(e.pointerId);
+    doDrag(e);
+    e.preventDefault();
+  }
+  function doDrag(e) {
+    if (!dragging) return;
+    tRecovery = clientXToT(e.clientX);
+    setCursor(tRecovery, true);
+    showSquares(tRecovery);
+    const thetas = tissues.map(t =>
+      Math.acos(Math.min(1, Math.max(0, mz(tRecovery, t.T1))))
+    );
+    setArrows(thetas);
+  }
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    try { e.target.releasePointerCapture(e.pointerId); } catch (_) {}
+  }
+  [dragOverlay, cursorHandle].forEach(elm => {
+    elm.addEventListener('pointerdown', startDrag);
+    elm.addEventListener('pointermove', doDrag);
+    elm.addEventListener('pointerup', endDrag);
+    elm.addEventListener('pointercancel', endDrag);
+  });
+
+  function tick(ts) {
+    if (phase === 'tipping') {
+      const u = Math.min(1, (ts - phaseStart) / TIP_DURATION_MS);
+      const s = u * u * (3 - 2 * u); // smoothstep
+      const theta = s * (Math.PI / 2);
+      setArrows([theta, theta, theta]);
+      setCursor(0, true);
+      if (u >= 1) {
+        phase = 'recovering';
+        lastTs = ts;
+        tRecovery = 0;
+      }
+    } else if (phase === 'recovering') {
+      if (playing) {
+        if (lastTs == null) lastTs = ts;
+        const dt = ts - lastTs;
+        lastTs = ts;
+        tRecovery += (T_MAX / 6000) * dt * speed; // sweep T_MAX in ~6s at 1x
+        if (tRecovery > T_MAX) {
+          tRecovery = T_MAX;
+          // Auto-pause and reveal squares at the end
+          if (playing) {
+            playing = false;
+            pauseBtn.textContent = 'Resume';
+            showSquares(tRecovery);
+          }
+        }
+      }
+      // Mz/M0 = 1 - e^(-t/T1).  Angle from +z = arccos(Mz/M0).
+      const thetas = tissues.map(t =>
+        Math.acos(Math.min(1, Math.max(0, mz(tRecovery, t.T1))))
+      );
+      setArrows(thetas);
+      setCursor(tRecovery, true);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  gotoPre();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
